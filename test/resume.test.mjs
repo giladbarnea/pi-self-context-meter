@@ -51,7 +51,7 @@ async function startSession(sandbox, sessionManager, { withExtension, tools, sav
 }
 
 async function saveAndResume(context, { tools, savedSelection = false, recordedRemoval = false } = {}) {
-  const sandbox = await mkdtemp(join(tmpdir(), "pi-how-much-ctx-have-resume-"));
+  const sandbox = await mkdtemp(join(tmpdir(), "pi-self-context-meter-resume-"));
   context.after(() => rm(sandbox, { recursive: true, force: true }));
   const sessionManager = SessionManager.create(sandbox, join(sandbox, "sessions"));
   const saved = await startSession(sandbox, sessionManager, { withExtension: recordedRemoval });
@@ -64,7 +64,7 @@ async function saveAndResume(context, { tools, savedSelection = false, recordedR
       await saved.session.prompt("Continue with the selected tools.");
     }
     if (recordedRemoval) {
-      saved.session.setActiveToolsByName(saved.session.getActiveToolNames().filter((name) => name !== "how_much_context"));
+      saved.session.setActiveToolsByName(saved.session.getActiveToolNames().filter((name) => name !== "context_meter"));
       await saved.session.prompt("Continue without the context tool.");
     }
   } finally {
@@ -77,32 +77,32 @@ async function saveAndResume(context, { tools, savedSelection = false, recordedR
   return resumed;
 }
 
-async function callHowMuchContext({ session, faux }) {
-  faux.setResponses([fauxAssistantMessage(fauxToolCall("how_much_context", {})), fauxAssistantMessage("Noted.")]);
+async function callContextMeter({ session, faux }) {
+  faux.setResponses([fauxAssistantMessage(fauxToolCall("context_meter", {})), fauxAssistantMessage("Noted.")]);
   await session.prompt("How much context do you have?");
-  return session.messages.filter((message) => message.role === "toolResult" && message.toolName === "how_much_context").at(-1);
+  return session.messages.filter((message) => message.role === "toolResult" && message.toolName === "context_meter").at(-1);
 }
 
-test("a session saved before the install resumes with a callable how_much_context", async (context) => {
+test("a session saved before the install resumes with a callable context_meter", async (context) => {
   const resumed = await saveAndResume(context);
-  const result = await callHowMuchContext(resumed);
+  const result = await callContextMeter(resumed);
   assert.equal(result?.isError, false, `Expected a successful call. Got: ${JSON.stringify(result?.content)}`);
 });
 
-test("/tree back to before the install keeps how_much_context callable", async (context) => {
+test("/tree back to before the install keeps context_meter callable", async (context) => {
   const resumed = await saveAndResume(context);
   const firstPrompt = resumed.session.sessionManager.getBranch().find((entry) => entry.type === "message" && entry.message.role === "user");
   await resumed.session.reload();
-  const before = await callHowMuchContext(resumed);
+  const before = await callContextMeter(resumed);
   assert.equal(before?.isError, false, `Expected a callable tool before the rewind. Got: ${JSON.stringify(before?.content)}`);
   await resumed.session.navigateTree(firstPrompt.id, { summarize: false });
-  const result = await callHowMuchContext(resumed);
+  const result = await callContextMeter(resumed);
   assert.equal(result?.isError, false, `Expected a successful call after the rewind. Got: ${JSON.stringify(result?.content)}`);
 });
 
-test("an SDK removal keeps how_much_context off when resuming a pre-install session", async (context) => {
-  const { session } = await saveAndResume(context, { tools: ["-how_much_context"] });
-  assert.equal(session.getActiveToolNames().includes("how_much_context"), false, `SDK removal was overridden: ${session.getActiveToolNames()}`);
+test("an SDK removal keeps context_meter off when resuming a pre-install session", async (context) => {
+  const { session } = await saveAndResume(context, { tools: ["-context_meter"] });
+  assert.equal(session.getActiveToolNames().includes("context_meter"), false, `SDK removal was overridden: ${session.getActiveToolNames()}`);
 });
 
 test("a saved /tools selection stays unchanged when resuming a pre-install session", async (context) => {
@@ -110,7 +110,7 @@ test("a saved /tools selection stays unchanged when resuming a pre-install sessi
   assert.deepEqual(session.getActiveToolNames(), ["read"], "The extension must respect the saved /tools selection");
 });
 
-test("a recorded removal keeps how_much_context off on resume", async (context) => {
+test("a recorded removal keeps context_meter off on resume", async (context) => {
   const { session } = await saveAndResume(context, { recordedRemoval: true });
-  assert.equal(session.getActiveToolNames().includes("how_much_context"), false, `Recorded removal was overridden: ${session.getActiveToolNames()}`);
+  assert.equal(session.getActiveToolNames().includes("context_meter"), false, `Recorded removal was overridden: ${session.getActiveToolNames()}`);
 });

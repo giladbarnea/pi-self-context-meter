@@ -1,5 +1,5 @@
 {
-  "name": "@giladbarnea/pi-how-much-ctx-have",
+  "name": "@giladbarnea/pi-self-context-meter",
   "version": "0.0.0",
   "description": "Give Pi agents a tool that reports current context-window usage.",
   "keywords": [

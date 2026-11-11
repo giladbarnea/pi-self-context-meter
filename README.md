@@ -1,6 +1,6 @@
-# pi-how-much-ctx-have
+# pi-self-context-meter
 
-A minimal Pi extension that gives the agent a `how_much_context` tool.
+A minimal Pi extension that gives the agent a `context_meter` tool.
 
 The tool reports the current context use against the model's full context window.
 
@@ -13,5 +13,5 @@ pi install .
 ## Output
 
 ```text
-You have used 87k tokens out of 272k available (32%).
+You have used 87k tokens out of 272k available (used 32%).
 ```

@@ -6,9 +6,9 @@ function humanizeTokenCount(tokenCount: number): string {
   return `${Math.round(tokenCount / 1_000)}k`;
 }
 
-const howMuchContextTool = defineTool({
-  name: "how_much_context",
-  label: "How Much Context",
+const contextMeterTool = defineTool({
+  name: "context_meter",
+  label: "Context Meter",
   description: "Query how much of the your current context window is used and how much is left. Your context window is your runway. You would want to adapt if you’re running out of it.",
   parameters: Type.Object({}),
 
@@ -18,11 +18,11 @@ const howMuchContextTool = defineTool({
       throw new Error("Context usage is unavailable");
     }
 
-    const text = `You have used ${humanizeTokenCount(usage.tokens)} tokens out of ${humanizeTokenCount(usage.contextWindow)} available (${Math.round(usage.percent)}%).`;
+    const text = `You have used ${humanizeTokenCount(usage.tokens)} tokens out of ${humanizeTokenCount(usage.contextWindow)} available (used ${Math.round(usage.percent)}%).`;
     return { content: [{ type: "text" as const, text }] };
   },
 });
 
-export default function howMuchContext(pi: ExtensionAPI): void {
-  pi.registerTool(howMuchContextTool);
+export default function contextMeter(pi: ExtensionAPI): void {
+  pi.registerTool(contextMeterTool);
 }
