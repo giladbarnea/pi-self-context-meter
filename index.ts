@@ -1,6 +1,6 @@
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type Theme, type ThemeColor } from "@earendil-works/pi-coding-agent";
-import { type Component, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { type Component, Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 /** @example humanizeTokenCount(87_000) // "87k" */
 function humanizeTokenCount(tokenCount: number): string {
@@ -95,8 +95,19 @@ function contextHeat(theme: Theme, percent: number, text: string): string {
   return `\x1b[38;2;${red};${green};${blue}m${text}\x1b[39m`;
 }
 
+/**
+ * Width of a line built only from this file's one-cell characters; much cheaper than pi-tui's general visibleWidth.
+ * @example meterTextWidth("\x1b[1m32%\x1b[22m used") // 8
+ */
+function meterTextWidth(line: string): number {
+  return line.replace(/\x1b\[[0-9;]*m/g, "").length;
+}
+
+type MeterParts = { meterless: Array<{ line: string; width: number }>; label: string; figures: string; meterBudget: number; fillOpen: string; fillClose: string; empty(cells: number): string };
+
 /** One meter line. Narrower widths shrink the meter, then drop it, then the label and the totals, keeping the used percent and what is left. */
 class MeterLine implements Component {
+  private parts: MeterParts | undefined;
   private cachedWidth: number | undefined;
   private cachedLines: string[] = [];
 
@@ -105,16 +116,18 @@ class MeterLine implements Component {
   render(width: number): string[] {
     if (width !== this.cachedWidth) {
       this.cachedWidth = width;
-      this.cachedLines = [this.layout(width)];
+      this.cachedLines = [this.layout(width, (this.parts ??= this.buildParts()))];
     }
     return this.cachedLines;
   }
 
   invalidate(): void {
+    this.parts = undefined;
     this.cachedWidth = undefined;
   }
 
-  private layout(width: number): string {
+  /** Everything that does not depend on the width, built once per theme. */
+  private buildParts(): MeterParts {
     const { theme, usage } = this;
     const dot = theme.fg("dim", " · ");
     const used = `${theme.fg("text", theme.bold(`${usage.percent}%`))}${theme.fg("muted", " used")}`;
@@ -122,19 +135,27 @@ class MeterLine implements Component {
     const left = `${theme.fg("text", `${usage.windowThousands - usage.usedThousands}k`)}${theme.fg("muted", " left")}`;
     const fullLabel = `${label(theme, "accent")}  `;
     const figures = `${used}${dot}${total}${dot}${left}`;
-    const meterCells = Math.min(METER_CELLS, width - visibleWidth(`${fullLabel}  ${figures}`));
-    const candidates = [
-      meterCells >= MIN_METER_CELLS ? `${fullLabel}${this.meter(meterCells)}  ${figures}` : undefined,
-      `${fullLabel}${figures}`,
-      `${fullLabel}${used}${dot}${left}`,
-      `${theme.fg("accent", "● ")}${used}${dot}${left}`,
-    ].filter((candidate) => candidate !== undefined);
-    return candidates.find((candidate) => visibleWidth(candidate) <= width) ?? truncateToWidth(candidates.at(-1)!, width, "");
+    const meterless = [`${fullLabel}${figures}`, `${fullLabel}${used}${dot}${left}`, `${theme.fg("accent", "● ")}${used}${dot}${left}`];
+    const [fillOpen, fillClose] = contextHeat(theme, usage.percent, "\0").split("\0") as [string, string];
+    return {
+      meterless: meterless.map((line) => ({ line, width: meterTextWidth(line) })),
+      label: fullLabel,
+      figures,
+      meterBudget: meterTextWidth(`${fullLabel}  ${figures}`),
+      fillOpen,
+      fillClose,
+      empty: (cells) => theme.fg("borderMuted", "─".repeat(cells)),
+    };
   }
 
-  private meter(cells: number): string {
-    const filled = Math.min(cells, Math.max(0, Math.round((this.usage.percent / 100) * cells)));
-    return `${contextHeat(this.theme, this.usage.percent, "━".repeat(filled))}${this.theme.fg("borderMuted", "─".repeat(cells - filled))}`;
+  private layout(width: number, parts: MeterParts): string {
+    const meterCells = Math.min(METER_CELLS, width - parts.meterBudget);
+    if (meterCells >= MIN_METER_CELLS) {
+      const filled = Math.min(meterCells, Math.max(0, Math.round((this.usage.percent / 100) * meterCells)));
+      return `${parts.label}${parts.fillOpen}${"━".repeat(filled)}${parts.fillClose}${parts.empty(meterCells - filled)}  ${parts.figures}`;
+    }
+    const fitting = parts.meterless.find((candidate) => candidate.width <= width);
+    return fitting ? fitting.line : truncateToWidth(parts.meterless.at(-1)!.line, width, "");
   }
 }
 
